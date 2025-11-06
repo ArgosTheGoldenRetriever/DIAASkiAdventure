@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkiFree - Classic Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #87CEEB;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        
+        #gameCanvas {
+            border: 4px solid #333;
+            background: white;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+        }
+        
+        #info {
+            margin-top: 20px;
+            background: white;
+            padding: 15px 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        
+        .stats {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        
+        .controls {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 40px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+        }
+        
+        #gameOver h1 {
+            color: #ff4444;
+            margin: 0 0 20px 0;
+        }
+        
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            margin-top: 20px;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="info">
+        <div class="stats">Distance: <span id="distance">0</span>m</div>
+        <div class="stats">Speed: <span id="speed">0</span></div>
+        <div class="controls">
+            Arrow Keys to move | Press F for max speed | R to restart
+        </div>
+    </div>
+    
+    <div id="gameOver">
+        <h1>GAME OVER</h1>
+        <p id="finalScore"></p>
+        <button onclick="restartGame()">Play Again</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Game state
+        let gameRunning = true;
+        let distance = 0;
+        let speed = 5;
+        let baseSpeed = 5;
+        let timeRemaining = 60;
+        let lastTime = Date.now();
+        
+        // Skier
+        const skier = {
+            x: canvas.width / 2,
+            y: 150,
+            width: 20,
+            height: 30,
+            direction: 0, // -1 left, 0 straight, 1 right
+            crashed: false
+        };
+        
+        // Obstacles
+        let obstacles = [];
+        const obstacleTypes = ['tree', 'rock', 'stump', 'text', 'text', 'text']; // More text obstacles
+        const obstacleTexts = [
+            'Hallucinations',
+            'Jailbreaks',
+            'Bias',
+            'Overfit',
+            'Prompt Injection',
+            'Mode Collapse',
+            'Adversarial',
+            'Toxic Output'
+        ];
+        
+        // Random text on snow
+        let snowTexts = [];
+        
+        // Bonus items
+        let bonusItems = [];
+        const bonusLabels = ['Apollo', 'LGI', 'aiRIS', 'Maverick', 'Trident'];
+        
+        // The infamous Yeti
+        let yeti = {
+            active: false,
+            x: -100,
+            y: -100,
+            width: 40,
+            height: 50,
+            speed: 0
+        };
+        
+        // Keyboard state
+        const keys = {};
+        
+        // Initialize obstacles
+        function initObstacles() {
+            obstacles = [];
+            for (let i = 0; i < 50; i++) {
+                obstacles.push(createObstacle(i * 100 + Math.random() * 200));
+            }
+        }
+        
+        function createObstacle(yPosition) {
+            const type = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
+            const obstacle = {
+                x: Math.random() * (canvas.width - 40) + 20,
+                y: yPosition,
+                type: type,
+                width: 30,
+                height: 30
+            };
+            
+            // If it's a text obstacle, add a random label
+            if (type === 'text') {
+                obstacle.label = obstacleTexts[Math.floor(Math.random() * obstacleTexts.length)];
+                obstacle.width = 80; // Wider for text
+            }
+            
+            return obstacle;
+        }
+        
+        // Initialize snow texts
+        function initSnowTexts() {
+            snowTexts = [];
+            for (let i = 0; i < 10; i++) {
+                snowTexts.push(createSnowText(i * 300 + Math.random() * 200));
+            }
+        }
+        
+        function createSnowText(yPosition) {
+            return {
+                x: Math.random() * (canvas.width - 200) + 100,
+                y: yPosition,
+                rotation: (Math.random() - 0.5) * 0.3
+            };
+        }
+        
+        // Initialize bonus items
+        function initBonusItems() {
+            bonusItems = [];
+            for (let i = 0; i < 15; i++) {
+                bonusItems.push(createBonusItem(i * 200 + Math.random() * 150));
+            }
+        }
+        
+        function createBonusItem(yPosition) {
+            return {
+                x: Math.random() * (canvas.width - 80) + 40,
+                y: yPosition,
+                label: bonusLabels[Math.floor(Math.random() * bonusLabels.length)],
+                radius: 25,
+                collected: false
+            };
+        }
+        
+        // Draw functions
+        function drawSkier() {
+            ctx.save();
+            ctx.translate(skier.x, skier.y);
+            
+            if (skier.crashed) {
+                // Crashed skier (X shape)
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(-10, -10);
+                ctx.lineTo(10, 10);
+                ctx.moveTo(10, -10);
+                ctx.lineTo(-10, 10);
+                ctx.stroke();
+            } else {
+                // Skier body
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(-5, -15, 10, 20);
+                
+                // Head
+                ctx.fillStyle = '#ffdbac';
+                ctx.beginPath();
+                ctx.arc(0, -20, 6, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Skis
+                ctx.fillStyle = '#333';
+                ctx.fillRect(-8, 5, 4, 20);
+                ctx.fillRect(4, 5, 4, 20);
+                
+                // Poles based on direction
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 2;
+                
+                if (skier.direction === -1) {
+                    // Leaning left
+                    ctx.beginPath();
+                    ctx.moveTo(-10, -5);
+                    ctx.lineTo(-15, 10);
+                    ctx.stroke();
+                } else if (skier.direction === 1) {
+                    // Leaning right
+                    ctx.beginPath();
+                    ctx.moveTo(10, -5);
+                    ctx.lineTo(15, 10);
+                    ctx.stroke();
+                } else {
+                    // Straight - both poles
+                    ctx.beginPath();
+                    ctx.moveTo(-8, 0);
+                    ctx.lineTo(-12, 12);
+                    ctx.moveTo(8, 0);
+                    ctx.lineTo(12, 12);
+                    ctx.stroke();
+                }
+            }
+            
+            ctx.restore();
+        }
+        
+        function drawObstacle(obs) {
+            ctx.save();
+            
+            if (obs.type === 'text') {
+                // Text-based obstacle
+                ctx.font = 'bold 16px Courier New';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                // Background box for better visibility
+                ctx.fillStyle = 'rgba(255, 50, 50, 0.8)';
+                const textWidth = ctx.measureText(obs.label).width;
+                ctx.fillRect(obs.x - textWidth/2 - 5, obs.y - 12, textWidth + 10, 24);
+                
+                // Border
+                ctx.strokeStyle = '#cc0000';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(obs.x - textWidth/2 - 5, obs.y - 12, textWidth + 10, 24);
+                
+                // Text
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(obs.label, obs.x, obs.y);
+                
+            } else if (obs.type === 'tree') {
+                // Tree trunk
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(obs.x - 4, obs.y, 8, 15);
+                
+                // Tree foliage
+                ctx.fillStyle = '#228B22';
+                ctx.beginPath();
+                ctx.moveTo(obs.x, obs.y - 15);
+                ctx.lineTo(obs.x - 15, obs.y + 5);
+                ctx.lineTo(obs.x + 15, obs.y + 5);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.beginPath();
+                ctx.moveTo(obs.x, obs.y - 8);
+                ctx.lineTo(obs.x - 12, obs.y + 8);
+                ctx.lineTo(obs.x + 12, obs.y + 8);
+                ctx.closePath();
+                ctx.fill();
+            } else if (obs.type === 'rock') {
+                // Gray rock
+                ctx.fillStyle = '#808080';
+                ctx.beginPath();
+                ctx.ellipse(obs.x, obs.y, 15, 12, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            } else if (obs.type === 'stump') {
+                // Brown stump
+                ctx.fillStyle = '#654321';
+                ctx.fillRect(obs.x - 10, obs.y - 5, 20, 12);
+                ctx.fillStyle = '#8B6914';
+                ctx.beginPath();
+                ctx.ellipse(obs.x, obs.y - 5, 10, 5, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.restore();
+        }
+        
+        function drawYeti() {
+            ctx.save();
+            
+            // Yeti body (furry monster) - now grey instead of white
+            ctx.fillStyle = '#808080';
+            ctx.fillRect(yeti.x - 20, yeti.y - 25, 40, 40);
+            
+            // Arms
+            ctx.fillRect(yeti.x - 30, yeti.y - 15, 10, 20);
+            ctx.fillRect(yeti.x + 20, yeti.y - 15, 10, 20);
+            
+            // Legs
+            ctx.fillRect(yeti.x - 15, yeti.y + 15, 12, 15);
+            ctx.fillRect(yeti.x + 3, yeti.y + 15, 12, 15);
+            
+            // Face
+            ctx.fillStyle = '#ffdbac';
+            ctx.fillRect(yeti.x - 12, yeti.y - 20, 24, 20);
+            
+            // Eyes (scary!)
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(yeti.x - 8, yeti.y - 15, 4, 4);
+            ctx.fillRect(yeti.x + 4, yeti.y - 15, 4, 4);
+            
+            // Mouth
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(yeti.x, yeti.y - 8, 6, 0, Math.PI);
+            ctx.stroke();
+            
+            // Teeth
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(yeti.x - 5, yeti.y - 8, 3, 4);
+            ctx.fillRect(yeti.x + 2, yeti.y - 8, 3, 4);
+            
+            ctx.restore();
+        }
+        
+        function drawSnowText(text) {
+            ctx.save();
+            ctx.translate(text.x, text.y);
+            ctx.rotate(text.rotation);
+            
+            // Draw text with slight shadow for depth
+            ctx.font = 'bold 32px Courier New';
+            ctx.textAlign = 'center';
+            
+            // Shadow
+            ctx.fillStyle = 'rgba(200, 200, 255, 0.3)';
+            ctx.fillText('DIAA Ski Adventure', 2, 2);
+            
+            // Main text
+            ctx.fillStyle = 'rgba(100, 149, 237, 0.4)';
+            ctx.fillText('DIAA Ski Adventure', 0, 0);
+            
+            ctx.restore();
+        }
+        
+        function drawBonusItem(bonus) {
+            if (bonus.collected) return;
+            
+            ctx.save();
+            
+            // Outer glow
+            ctx.beginPath();
+            ctx.arc(bonus.x, bonus.y, bonus.radius + 3, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(50, 205, 50, 0.3)';
+            ctx.fill();
+            
+            // Green circle
+            ctx.beginPath();
+            ctx.arc(bonus.x, bonus.y, bonus.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#32CD32';
+            ctx.fill();
+            
+            // Border
+            ctx.strokeStyle = '#228B22';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Inner highlight
+            ctx.beginPath();
+            ctx.arc(bonus.x - 5, bonus.y - 5, 8, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.fill();
+            
+            // Text label
+            ctx.font = 'bold 11px Courier New';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(bonus.label, bonus.x, bonus.y);
+            
+            // +100m indicator
+            ctx.font = 'bold 8px Courier New';
+            ctx.fillStyle = '#ffff00';
+            ctx.fillText('+100m', bonus.x, bonus.y + 10);
+            
+            ctx.restore();
+        }
+        
+        function drawBackground() {
+            // Snow background
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Add some snow texture
+            ctx.fillStyle = '#f0f8ff';
+            for (let i = 0; i < 20; i++) {
+                let x = (Date.now() * 0.05 + i * 123) % canvas.width;
+                let y = (distance * 2 + i * 234) % canvas.height;
+                ctx.beginPath();
+                ctx.arc(x, y, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        
+        // Game logic
+        function updateSkier() {
+            if (skier.crashed) return;
+            
+            // Horizontal movement
+            if (keys['ArrowLeft']) {
+                skier.x -= 5;
+                skier.direction = -1;
+                speed = Math.max(baseSpeed - 2, 2);
+            } else if (keys['ArrowRight']) {
+                skier.x += 5;
+                skier.direction = 1;
+                speed = Math.max(baseSpeed - 2, 2);
+            } else {
+                skier.direction = 0;
+            }
+            
+            // Vertical speed control
+            if (keys['ArrowDown']) {
+                speed = Math.min(speed + 0.2, 15);
+                baseSpeed = speed;
+            } else if (keys['ArrowUp']) {
+                speed = Math.max(speed - 0.2, 2);
+                baseSpeed = speed;
+            }
+            
+            // Fast mode (F key)
+            if (keys['f'] || keys['F']) {
+                speed = 15;
+            }
+            
+            // Keep skier on screen
+            skier.x = Math.max(20, Math.min(canvas.width - 20, skier.x));
+            
+            // Update distance
+            distance += speed * 0.1;
+        }
+        
+        function updateTimer() {
+            const currentTime = Date.now();
+            const deltaTime = (currentTime - lastTime) / 1000; // Convert to seconds
+            lastTime = currentTime;
+            
+            timeRemaining -= deltaTime;
+            
+            if (timeRemaining <= 0) {
+                timeRemaining = 0;
+                gameOver('Time\'s up!');
+            }
+        }
+        
+        function updateObstacles() {
+            // Move obstacles up (skier moving down)
+            obstacles.forEach(obs => {
+                obs.y -= speed;
+            });
+            
+            // Remove obstacles that are off screen and add new ones
+            obstacles = obstacles.filter(obs => obs.y > -50);
+            
+            while (obstacles.length < 50) {
+                let lastY = obstacles.length > 0 ? 
+                    Math.max(...obstacles.map(o => o.y)) : 0;
+                obstacles.push(createObstacle(lastY + 100 + Math.random() * 100));
+            }
+        }
+        
+        function updateSnowTexts() {
+            // Move texts up (skier moving down)
+            snowTexts.forEach(text => {
+                text.y -= speed;
+            });
+            
+            // Remove texts that are off screen and add new ones
+            snowTexts = snowTexts.filter(text => text.y > -50);
+            
+            while (snowTexts.length < 10) {
+                let lastY = snowTexts.length > 0 ? 
+                    Math.max(...snowTexts.map(t => t.y)) : 0;
+                snowTexts.push(createSnowText(lastY + 300 + Math.random() * 200));
+            }
+        }
+        
+        function updateBonusItems() {
+            // Move bonus items up (skier moving down)
+            bonusItems.forEach(bonus => {
+                bonus.y -= speed;
+            });
+            
+            // Remove bonus items that are off screen and add new ones
+            bonusItems = bonusItems.filter(bonus => bonus.y > -50);
+            
+            while (bonusItems.length < 15) {
+                let lastY = bonusItems.length > 0 ? 
+                    Math.max(...bonusItems.map(b => b.y)) : 0;
+                bonusItems.push(createBonusItem(lastY + 200 + Math.random() * 150));
+            }
+        }
+        
+        function updateYeti() {
+            // Activate yeti after 500m
+            if (distance > 500 && !yeti.active && !skier.crashed) {
+                yeti.active = true;
+                yeti.x = skier.x - 100;
+                yeti.y = canvas.height + 50;
+                yeti.speed = speed + 2;
+            }
+            
+            if (yeti.active) {
+                // Yeti chases skier
+                if (yeti.x < skier.x) yeti.x += 3;
+                if (yeti.x > skier.x) yeti.x -= 3;
+                
+                yeti.y -= yeti.speed;
+                yeti.speed = Math.min(yeti.speed + 0.05, speed + 4);
+                
+                // Check if yeti caught the skier
+                if (checkCollision(yeti, skier)) {
+                    skier.crashed = true;
+                    gameOver('The Yeti got you!');
+                }
+            }
+        }
+        
+        function checkCollision(obj1, obj2) {
+            return obj1.x < obj2.x + obj2.width / 2 &&
+                   obj1.x + obj1.width / 2 > obj2.x &&
+                   obj1.y < obj2.y + obj2.height / 2 &&
+                   obj1.y + obj1.height / 2 > obj2.y;
+        }
+        
+        function checkCollisions() {
+            if (skier.crashed) return;
+            
+            obstacles.forEach(obs => {
+                // Adjust collision box based on obstacle type
+                let collisionWidth = obs.type === 'text' ? 40 : 25;
+                
+                if (Math.abs(obs.y - skier.y) < 30 &&
+                    Math.abs(obs.x - skier.x) < collisionWidth) {
+                    skier.crashed = true;
+                    gameOver('You crashed!');
+                }
+            });
+        }
+        
+        function checkBonusCollection() {
+            if (skier.crashed) return;
+            
+            bonusItems.forEach(bonus => {
+                if (!bonus.collected) {
+                    // Check if skier is close enough to collect
+                    const dist = Math.sqrt(
+                        Math.pow(bonus.x - skier.x, 2) + 
+                        Math.pow(bonus.y - skier.y, 2)
+                    );
+                    
+                    if (dist < bonus.radius + 15) {
+                        bonus.collected = true;
+                        distance += 100; // Add 100m to score!
+                        
+                        // Visual feedback
+                        showBonusText(bonus);
+                    }
+                }
+            });
+        }
+        
+        function showBonusText(bonus) {
+            // Create a temporary floating text effect
+            const bonusText = {
+                x: bonus.x,
+                y: bonus.y,
+                text: '+100m',
+                alpha: 1,
+                startTime: Date.now()
+            };
+            
+            // Simple animation for bonus text (will fade and rise)
+            const animateBonus = () => {
+                const elapsed = Date.now() - bonusText.startTime;
+                if (elapsed < 1000) {
+                    ctx.save();
+                    ctx.font = 'bold 20px Courier New';
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = `rgba(50, 205, 50, ${1 - elapsed/1000})`;
+                    ctx.fillText(bonusText.text, bonusText.x, bonusText.y - elapsed * 0.05);
+                    ctx.restore();
+                    requestAnimationFrame(animateBonus);
+                }
+            };
+            animateBonus();
+        }
+        
+        function gameOver(reason) {
+            gameRunning = false;
+            document.getElementById('gameOver').style.display = 'block';
+            let message = `You traveled ${Math.floor(distance)}m! `;
+            
+            if (reason === 'Time\'s up!') {
+                message += reason;
+            } else if (yeti.active && reason !== 'You crashed!') {
+                message += 'The Yeti got you!';
+            } else {
+                message += reason || 'You crashed!';
+            }
+            
+            document.getElementById('finalScore').textContent = message;
+        }
+        
+        function restartGame() {
+            gameRunning = true;
+            distance = 0;
+            speed = 5;
+            baseSpeed = 5;
+            timeRemaining = 60;
+            lastTime = Date.now();
+            skier.x = canvas.width / 2;
+            skier.y = 150;
+            skier.crashed = false;
+            skier.direction = 0;
+            yeti.active = false;
+            yeti.x = -100;
+            yeti.y = -100;
+            initObstacles();
+            initSnowTexts();
+            initBonusItems();
+            document.getElementById('gameOver').style.display = 'none';
+            gameLoop();
+        }
+        
+        // Update display
+        function updateDisplay() {
+            document.getElementById('distance').textContent = Math.floor(distance);
+            document.getElementById('speed').textContent = Math.floor(speed);
+        }
+        
+        // Main game loop
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            // Update
+            updateTimer();
+            updateSkier();
+            updateObstacles();
+            updateSnowTexts();
+            updateBonusItems();
+            updateYeti();
+            checkCollisions();
+            checkBonusCollection();
+            updateDisplay();
+            
+            // Draw
+            drawBackground();
+            
+            // Draw snow texts
+            snowTexts.forEach(text => {
+                if (text.y > -50 && text.y < canvas.height + 50) {
+                    drawSnowText(text);
+                }
+            });
+            
+            // Draw bonus items
+            bonusItems.forEach(bonus => {
+                if (bonus.y > -50 && bonus.y < canvas.height + 50) {
+                    drawBonusItem(bonus);
+                }
+            });
+            
+            obstacles.forEach(obs => {
+                if (obs.y > -30 && obs.y < canvas.height + 30) {
+                    drawObstacle(obs);
+                }
+            });
+            
+            drawSkier();
+            
+            if (yeti.active && yeti.y < canvas.height + 50) {
+                drawYeti();
+            }
+            
+            // Draw timer at top
+            ctx.save();
+            ctx.font = 'bold 32px Courier New';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = timeRemaining <= 10 ? '#ff0000' : '#000000';
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 4;
+            ctx.strokeText(`Time: ${Math.ceil(timeRemaining)}s`, canvas.width / 2, 40);
+            ctx.fillText(`Time: ${Math.ceil(timeRemaining)}s`, canvas.width / 2, 40);
+            ctx.restore();
+            
+            // Warning message when yeti appears
+            if (yeti.active && !skier.crashed && yeti.y > canvas.height - 100) {
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+                ctx.font = 'bold 24px Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText('THE YETI IS COMING!', canvas.width / 2, 80);
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Event listeners
+        document.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            if (e.key === 'r' || e.key === 'R') {
+                restartGame();
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+        
+        // Start game
+        initObstacles();
+        initSnowTexts();
+        initBonusItems();
+        gameLoop();
+    </script>
+</body>
+</html>
