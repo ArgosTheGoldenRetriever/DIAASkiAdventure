@@ -98,7 +98,7 @@
             margin: 5px;
         }
 
-        /* --- MOBILE CONTROLS (THE FIX) --- */
+        /* --- MOBILE CONTROLS --- */
         #mobileControls {
             display: none; /* Hidden on Desktop */
             position: fixed; /* Floats above everything */
@@ -123,6 +123,7 @@
             pointer-events: auto; /* Re-enable touch for the buttons */
         }
 
+        /* Base style for all control buttons */
         .control-btn {
             width: 65px;
             height: 65px;
@@ -137,6 +138,11 @@
             -webkit-user-select: none;
             backdrop-filter: blur(4px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        /* --- THE FIX: Make D-Pad buttons wider --- */
+        .d-pad .control-btn {
+            width: 110px; /* Significantly wider than height */
         }
 
         .control-btn:active {
