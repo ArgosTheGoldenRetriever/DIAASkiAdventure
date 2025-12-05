@@ -3,57 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DIAA - AI Ski Adventure (Mobile)</title>
+    <title>DIAA - AI Ski Adventure</title>
     <style>
         body {
             margin: 0;
-            padding: 10px;
+            padding: 0;
             background: #87CEEB;
             font-family: 'Courier New', monospace;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            /* Prevent pull-to-refresh on mobile */
-            overscroll-behavior: none; 
-            touch-action: none;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden; /* Prevents scrolling completely */
+            touch-action: none; /* Disables double-tap zoom */
+            overscroll-behavior: none;
         }
         
         #gameCanvas {
-            border: 4px solid #333;
             background: white;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
-            /* Make canvas responsive */
-            max-width: 100%;
+            /* Responsive Logic */
+            width: 100%;
+            max-width: 800px; /* Max width for desktop */
             height: auto;
+            max-height: 100vh;
+            object-fit: contain; /* Keeps aspect ratio intact */
+            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
         }
         
+        /* Stats Bar - Floating at top */
         #info {
-            margin-top: 10px;
-            background: white;
-            padding: 10px 15px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             text-align: center;
-            width: 90%;
-            max-width: 800px;
+            z-index: 10;
         }
         
         .stats {
             font-size: 16px;
             font-weight: bold;
-            margin: 5px 0;
+            margin: 0 10px;
             display: inline-block;
-            margin-right: 15px;
         }
         
-        .controls {
-            margin-top: 5px;
-            font-size: 12px;
+        .controls-text {
+            font-size: 12px; 
             color: #666;
+            margin-top: 5px;
+            display: none; /* Hide text instructions on mobile */
+        }
+
+        /* Show text instructions only on Desktop */
+        @media (min-width: 900px) {
+            .controls-text { display: block; }
+            #gameCanvas { border: 4px solid #333; }
         }
         
+        /* Game Over Modal */
         #gameOver {
             position: absolute;
             top: 50%;
@@ -65,17 +77,14 @@
             border-radius: 10px;
             text-align: center;
             display: none;
-            width: 90%;
-            max-width: 500px;
-            max-height: 90vh;
+            width: 85%;
+            max-width: 400px;
+            max-height: 80vh;
             overflow-y: auto;
             z-index: 100;
         }
         
-        #gameOver h1 {
-            color: #ff4444;
-            margin: 0 0 15px 0;
-        }
+        #gameOver h1 { color: #ff4444; margin: 0 0 15px 0; }
         
         button {
             background: #4CAF50;
@@ -88,70 +97,75 @@
             font-family: 'Courier New', monospace;
             margin: 5px;
         }
-        
-        /* NEW: Mobile Control Styles */
+
+        /* --- MOBILE CONTROLS (THE FIX) --- */
         #mobileControls {
-            display: none; /* Hidden on desktop by default */
-            margin-top: 15px;
+            display: none; /* Hidden on Desktop */
+            position: fixed; /* Floats above everything */
+            bottom: 30px;
+            left: 0;
             width: 100%;
-            max-width: 800px;
+            padding: 0 20px;
+            box-sizing: border-box;
             justify-content: space-between;
-            gap: 10px;
-            touch-action: manipulation;
+            z-index: 50; 
+            pointer-events: none; /* Allows touching the game through the empty space */
         }
 
-        .d-pad {
+        /* Only show on screens smaller than 900px */
+        @media (max-width: 900px) {
+            #mobileControls { display: flex; }
+        }
+
+        .d-pad, .action-btns {
             display: flex;
             gap: 15px;
+            pointer-events: auto; /* Re-enable touch for the buttons */
         }
 
         .control-btn {
-            width: 60px;
-            height: 60px;
+            width: 65px;
+            height: 65px;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.5);
-            border: 3px solid #333;
-            font-size: 24px;
+            background: rgba(255, 255, 255, 0.5); /* Semi-transparent */
+            border: 2px solid #333;
+            font-size: 30px;
             display: flex;
             align-items: center;
             justify-content: center;
             user-select: none;
             -webkit-user-select: none;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
         }
 
         .control-btn:active {
             background: rgba(76, 175, 80, 0.8);
-            transform: scale(0.95);
+            transform: scale(0.9);
         }
 
-        /* Show mobile controls on screens smaller than 900px */
-        @media (max-width: 900px) {
-            #mobileControls {
-                display: flex;
-            }
-            .controls {
-                display: none; /* Hide keyboard instructions on mobile */
-            }
-        }
-
+        /* Leaderboard Button */
         #leaderboardBtn {
             position: absolute;
-            top: 10px;
+            top: 60px; /* Pushed down so it doesn't cover stats */
             right: 10px;
             background: #2196F3;
             padding: 8px 15px;
             font-size: 12px;
-            z-index: 50;
+            z-index: 40;
+            opacity: 0.9;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
         
+        /* Leaderboard Styles */
         #nameEntry input {
             padding: 10px;
             font-size: 16px;
             border: 2px solid #4CAF50;
             border-radius: 5px;
-            font-family: 'Courier New', monospace;
             width: 70%;
             margin-bottom: 10px;
+            font-family: 'Courier New', monospace;
         }
         
         .leaderboard-entry {
@@ -162,6 +176,7 @@
             display: flex;
             justify-content: space-between;
             font-size: 14px;
+            text-align: left;
         }
         
         .leaderboard-entry.current-score {
@@ -171,28 +186,28 @@
 
         .rank { color: #FFD700; font-weight: bold; margin-right: 10px; }
         .score { color: #4CAF50; font-weight: bold; }
-        
     </style>
 </head>
 <body>
+
     <button id="leaderboardBtn" onclick="showLeaderboardModal()">🏆 Top 10</button>
-    
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
     
     <div id="info">
         <div class="stats">Dist: <span id="distance">0</span>m</div>
         <div class="stats">Speed: <span id="speed">0</span></div>
-        <div class="controls">
+        <div class="controls-text">
             Arrow Keys to move | F for Boost | R to Restart
         </div>
     </div>
 
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
     <div id="mobileControls">
         <div class="d-pad">
             <div class="control-btn" id="btnLeft">⬅️</div>
             <div class="control-btn" id="btnRight">➡️</div>
         </div>
-        <div style="display: flex; gap: 15px;">
+        <div class="action-btns">
             <div class="control-btn" id="btnBoost" style="background: rgba(255, 215, 0, 0.5);">⚡</div>
             <div class="control-btn" id="btnRestart" style="background: rgba(255, 99, 71, 0.5);">🔄</div>
         </div>
@@ -204,7 +219,7 @@
         
         <div id="nameEntry" style="display:none;">
             <p style="color: #FFD700; font-weight: bold;">🎉 TOP 10! Enter name:</p>
-            <input type="text" id="playerName" maxlength="15" placeholder="Name">
+            <input type="text" id="playerName" maxlength="15" placeholder="Your Name">
             <button onclick="submitScore()">Submit</button>
         </div>
         
@@ -215,15 +230,17 @@
             </div>
         </div>
         
-        <button onclick="restartGame()">Play Again</button>
-        <button onclick="closeModal()" style="background:#666; font-size: 14px;">Close</button>
+        <div style="margin-top: 20px;">
+            <button onclick="restartGame()">Play Again</button>
+            <button onclick="closeModal()" style="background:#666;">Close</button>
+        </div>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
     <script>
-        // Firebase configuration (Kept same as original)
+        // --- CONFIGURATION ---
         const firebaseConfig = {
             apiKey: "AIzaSyCvDmozbYu61rtepx7ihL52g4OtfP38Kf8",
             authDomain: "diaa-ski-adventure.firebaseapp.com",
@@ -235,10 +252,12 @@
             measurementId: "G-NY1JX13GP3"
         };
 
+        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
         const leaderboardRef = database.ref('leaderboard');
 
+        // Game Setup
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
@@ -251,31 +270,15 @@
         let currentScores = [];
         let finalDistance = 0;
         
-        const skier = {
-            x: canvas.width / 2,
-            y: 150,
-            width: 20,
-            height: 30,
-            direction: 0,
-            crashed: false
-        };
-        
+        // Entities
+        const skier = { x: canvas.width / 2, y: 150, width: 20, height: 30, direction: 0, crashed: false };
         let obstacles = [];
         const obstacleTypes = ['tree', 'rock', 'stump', 'text', 'text', 'text'];
         const obstacleTexts = ['Hallucinations', 'Jailbreaks', 'Bias', 'Overfit', 'Prompt Injection', 'Mode Collapse', 'Adversarial', 'Toxic Output'];
         let snowTexts = [];
         let bonusItems = [];
         const bonusLabels = ['Apollo', 'LGI', 'aiRIS', 'Maverick', 'Trident'];
-        
-        let yeti = {
-            active: false,
-            x: -100,
-            y: -100,
-            width: 40,
-            height: 50,
-            speed: 0
-        };
-        
+        let yeti = { active: false, x: -100, y: -100, width: 40, height: 50, speed: 0 };
         const keys = {};
         
         // --- LEADERBOARD LOGIC ---
@@ -283,10 +286,7 @@
             leaderboardRef.orderByChild('score').limitToLast(10).once('value', (snapshot) => {
                 currentScores = [];
                 snapshot.forEach((childSnapshot) => {
-                    currentScores.push({
-                        id: childSnapshot.key,
-                        ...childSnapshot.val()
-                    });
+                    currentScores.push({ id: childSnapshot.key, ...childSnapshot.val() });
                 });
                 currentScores.sort((a, b) => b.score - a.score);
                 if (callback) callback();
@@ -339,7 +339,7 @@
             document.getElementById('gameOver').style.display = 'none';
         }
 
-        // --- GAME INIT LOGIC ---
+        // --- GAME INITIALIZATION ---
         function initObstacles() {
             obstacles = [];
             for (let i = 0; i < 50; i++) obstacles.push(createObstacle(i * 100 + Math.random() * 200));
@@ -363,7 +363,7 @@
             return { x: Math.random() * (canvas.width - 80) + 40, y: yPosition, label: bonusLabels[Math.floor(Math.random() * bonusLabels.length)], radius: 25, collected: false };
         }
         
-        // --- DRAW FUNCTIONS (Simplified for brevity, logic preserved) ---
+        // --- DRAWING ---
         function drawSkier() {
             ctx.save();
             ctx.translate(skier.x, skier.y);
@@ -374,7 +374,8 @@
                 ctx.fillStyle = '#ffdbac'; ctx.beginPath(); ctx.arc(0, -20, 6, 0, Math.PI * 2); ctx.fill();
                 ctx.fillStyle = '#333'; ctx.fillRect(-8, 5, 4, 20); ctx.fillRect(4, 5, 4, 20);
                 ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
-                if (skier.direction === -1) { ctx.rotate(-0.3); } else if (skier.direction === 1) { ctx.rotate(0.3); }
+                if (skier.direction === -1) ctx.rotate(-0.3);
+                else if (skier.direction === 1) ctx.rotate(0.3);
                 ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(-12, 15); ctx.stroke();
                 ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(12, 15); ctx.stroke();
             }
@@ -399,7 +400,7 @@
             ctx.save(); ctx.translate(bonus.x, bonus.y); ctx.strokeStyle = '#32CD32'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, bonus.radius, 0, Math.PI * 2); ctx.stroke(); ctx.fillStyle = 'rgba(50, 205, 50, 0.3)'; ctx.fill(); ctx.font = 'bold 10px Courier New'; ctx.textAlign = 'center'; ctx.fillStyle = '#228B22'; ctx.fillText(bonus.label, 0, 4); ctx.restore();
         }
 
-        // --- UPDATE FUNCTIONS ---
+        // --- UPDATES ---
         function updateTimer() {
             const now = Date.now(); const deltaTime = (now - lastTime) / 1000; lastTime = now;
             timeRemaining -= deltaTime;
@@ -408,7 +409,6 @@
 
         function updateSkier() {
             if (skier.crashed) return;
-            // Support both keys and touch-mapped keys
             if (keys['ArrowLeft'] || keys['a'] || keys['A']) { skier.direction = -1; skier.x -= 5; speed = baseSpeed * 0.7; }
             else if (keys['ArrowRight'] || keys['d'] || keys['D']) { skier.direction = 1; skier.x += 5; speed = baseSpeed * 0.7; }
             else { skier.direction = 0; speed = baseSpeed; }
@@ -423,13 +423,11 @@
             obstacles = obstacles.filter(obs => obs.y > -50);
             while (obstacles.length < 50) { let lastY = obstacles.length > 0 ? Math.max(...obstacles.map(o => o.y)) : 0; obstacles.push(createObstacle(lastY + 100 + Math.random() * 200)); }
         }
-        
         function updateSnowTexts() {
             snowTexts.forEach(text => text.y -= speed);
             snowTexts = snowTexts.filter(text => text.y > -50);
             while (snowTexts.length < 10) { let lastY = snowTexts.length > 0 ? Math.max(...snowTexts.map(t => t.y)) : 0; snowTexts.push(createSnowText(lastY + 300 + Math.random() * 200)); }
         }
-        
         function updateBonusItems() {
             bonusItems.forEach(bonus => bonus.y -= speed);
             bonusItems = bonusItems.filter(bonus => bonus.y > -50);
@@ -496,20 +494,29 @@
         function gameLoop() {
             if (!gameRunning) return;
             updateTimer(); updateSkier(); updateObstacles(); updateSnowTexts(); updateBonusItems(); updateYeti(); checkCollisions();
+            
+            // Update UI
             document.getElementById('distance').textContent = Math.floor(distance);
             document.getElementById('speed').textContent = Math.floor(speed);
+            
+            // Draw
             ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
             snowTexts.forEach(t => { if(t.y > -50 && t.y < 650) drawSnowText(t); });
             bonusItems.forEach(b => { if(b.y > -50 && b.y < 650) drawBonusItem(b); });
             obstacles.forEach(o => { if(o.y > -30 && o.y < 630) drawObstacle(o); });
             drawSkier();
             if (yeti.active) drawYeti();
+            
             ctx.save(); ctx.font = 'bold 32px Courier New'; ctx.textAlign = 'center'; ctx.fillStyle = timeRemaining <= 10 ? '#ff0000' : '#000000'; ctx.fillText(`Time: ${Math.ceil(timeRemaining)}s`, canvas.width / 2, 40); ctx.restore();
+            
             if (yeti.active && !skier.crashed && yeti.y > canvas.height - 100) { ctx.fillStyle = 'rgba(255, 0, 0, 0.8)'; ctx.font = 'bold 24px Courier New'; ctx.textAlign = 'center'; ctx.fillText('THE YETI IS COMING!', canvas.width / 2, 80); }
+            
             requestAnimationFrame(gameLoop);
         }
 
-        // --- INPUT HANDLING ---
+        // --- INPUT HANDLING (KEYBOARD & TOUCH) ---
+        
+        // Keyboard
         document.addEventListener('keydown', (e) => {
             const isTyping = document.activeElement.tagName === 'INPUT';
             if (!isTyping) {
@@ -520,28 +527,32 @@
         });
         document.addEventListener('keyup', (e) => { if (document.activeElement.tagName !== 'INPUT') keys[e.key] = false; });
 
-        // --- NEW: TOUCH EVENT HANDLING ---
+        // Touch (Helper Function)
         function setupTouch(elemId, keyMap) {
             const elem = document.getElementById(elemId);
             if(!elem) return;
+            
+            // Touch Start: Trigger Key Down
             elem.addEventListener('touchstart', (e) => {
-                e.preventDefault(); // Stop zoom/scroll
+                e.preventDefault(); // Stop browser zooming/scrolling
                 keys[keyMap] = true;
                 if(keyMap === 'r') restartGame();
             }, {passive: false});
+
+            // Touch End: Trigger Key Up
             elem.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 keys[keyMap] = false;
             }, {passive: false});
-            // Prevent mouse events from firing after touch events
-            elem.addEventListener('mousedown', (e) => e.preventDefault());
         }
 
+        // Map Buttons to Keys
         setupTouch('btnLeft', 'ArrowLeft');
         setupTouch('btnRight', 'ArrowRight');
         setupTouch('btnBoost', 'f');
         setupTouch('btnRestart', 'r');
 
+        // Start
         initObstacles(); initSnowTexts(); initBonusItems(); gameLoop();
     </script>
 </body>
